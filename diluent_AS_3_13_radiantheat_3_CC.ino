@@ -78,8 +78,11 @@ volatile unsigned seal_temperature = 0;
 #define STATION_FILL_SERVO      13
 #define STATION_FILL_SWITCH     27
 #define STATION_FILL_UP         235
-#define STATION_FILL_CHECK      /*222*/ 196
-#define STATION_FILL_DOWN       135
+#define STATION_FILL_CHECK      165
+#define STATION_FILL_CHECK_UPPER 190
+#define STATION_FILL_CHECK_LOWER 140
+#define STATION_FILL_TORQUE_THRESHHOLD 381
+#define STATION_FILL_DOWN       114
 #define STATION_FILL_STEP       3
 #define STATION_FILL_DIRECTION  6
 #define STATION_FILL_STEPS      1025
@@ -389,7 +392,7 @@ handle_pause:
     unsigned fill_tries = 0;
     unsigned fill_servopos = 0;
     double fill_sensorval = 0;
-    pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_CHECK);
+    pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_CHECK_UPPER);
     fill_state = FILL_CHECK_1;
     
     // Seal station
@@ -412,16 +415,16 @@ handle_pause:
         // 3 strikes and you're out
         if (fill_tries >= 4) {
           fill_state = FILL_OFF;
-          global_state = FILL_ERROR;
+          //global_state = FILL_ERROR;  does not stop for fill error 
           LED_ERROR(LED_5R);
         } else {
-          pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_CHECK);
+          pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_CHECK_UPPER);
           FILL_TRANS(FILL_CHECK_1);
         }
       } else if (fill_state == FILL_CHECK_1/* && FILL_TIME() > 500*/) {
         
         //pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_DOWN);
-        fill_servopos = STATION_FILL_CHECK;
+        fill_servopos = STATION_FILL_CHECK_UPPER;
         FILL_TRANS(FILL_CHECK_2);
         
         //delay(100); FILL_SENSE();
@@ -434,15 +437,22 @@ handle_pause:
       } else if (fill_state == FILL_CHECK_2) {
         //fill torque//
         if (fill_servopos > STATION_FILL_DOWN) {
-          if (FILL_SENSE() < 400 && fill_servopos > 160 && fill_servopos < 200) {
+          if (FILL_SENSE() < STATION_FILL_TORQUE_THRESHHOLD && fill_servopos > STATION_FILL_CHECK_LOWER && fill_servopos < STATION_FILL_CHECK) {
+            Serial.print("fail 1 ");
+            Serial.println(fill_sensorval);
+           if (FILL_SENSE() < STATION_FILL_TORQUE_THRESHHOLD){
+            Serial.print("fail 2 ");
+            Serial.println(fill_sensorval);
             // Fill switch contacted something, bad
             fill_tries += 1;
             pwm.setPWM(STATION_FILL_SERVO, 0, STATION_FILL_UP);
             FILL_TRANS(FILL_RESET);
+           }
           } else {
+            Serial.println(fill_sensorval);
             fill_servopos -= 1;
             pwm.setPWM(STATION_FILL_SERVO, 0, fill_servopos);
-            delay(18);
+            delay(9);
           }
         
         } else {   
@@ -480,7 +490,7 @@ handle_pause:
       }
       
       if (seal_state == SEAL_SLOW_SPEED) {
-        pwm.setPWM(STATION_SEAL_MOTOR, 0, map(analogRead(STATION_SEAL_SPEED), 0, 1023, map(10, 0, 100, MOTOR_0, MOTOR_100), map(25, 0, 100, MOTOR_0, MOTOR_100)));
+        pwm.setPWM(STATION_SEAL_MOTOR, 0, 381);//map(analogRead(STATION_SEAL_SPEED), 0, 1023, map(10, 0, 100, MOTOR_0, MOTOR_100), map(25, 0, 100, MOTOR_0, MOTOR_100)));
         seal_state = SEAL_TURN_2;
       } else if (seal_state == SEAL_DONE) {
         pwm.setPWM(STATION_SEAL_MOTOR, 0, MOTOR_0);
